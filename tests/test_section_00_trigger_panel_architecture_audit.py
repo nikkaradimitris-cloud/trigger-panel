@@ -8,6 +8,7 @@ README = ROOT / "README.md"
 ROADMAP = ROOT / "docs" / "ROADMAP.md"
 ARCH_AUDIT = ROOT / "docs" / "TRIGGER_PANEL_ARCHITECTURE_AUDIT.md"
 SECTION_AUDIT = ROOT / "docs" / "audits" / "section_00_trigger_panel_architecture_audit.md"
+FINAL_AUDIT = ROOT / "docs" / "FINAL_TRIGGER_PANEL_AUDIT_CLOSURE.md"
 
 
 def _read(path: Path) -> str:
@@ -32,8 +33,27 @@ def test_readme_states_internal_operator_only() -> None:
 
 def test_roadmap_contains_sections_0_to_16() -> None:
     text = _read(ROADMAP)
-    for i in range(17):
-        assert f"- {i}." in text
+    expected_titles = [
+        "0. Trigger Panel Architecture Audit",
+        "1. Protected Trigger Panel Shell",
+        "2. Full Runtime Event Payload Builder",
+        "3. Runtime Event Buttons",
+        "4. Dashboard Visibility Proof",
+        "5. Output Trigger Buttons",
+        "6. Health Trigger Buttons",
+        "7. Automation Outcome Buttons",
+        "8. Queue Trigger Buttons",
+        "9. Approvals Trigger Buttons",
+        "10. Flags Trigger Buttons",
+        "11. Manager Signal Buttons",
+        "12. Runtime Registry Probe",
+        "13. Library / Archive Probe",
+        "14. Unified Trigger Result Log",
+        "15. Test Data Cleanup Controls",
+        "16. Final Trigger Panel Audit Closure",
+    ]
+    for title in expected_titles:
+        assert title in text
 
 
 def test_section_0_is_passed_and_stage_lines_exist() -> None:
@@ -45,12 +65,26 @@ def test_section_0_is_passed_and_stage_lines_exist() -> None:
 
 def test_roadmap_stage_statuses_after_core_block() -> None:
     roadmap_text = _read(ROADMAP)
-    assert "- 1. Protected Trigger Panel Shell - PASSED" in roadmap_text
-    assert "- 2. Full Runtime Event Payload Builder - PASSED" in roadmap_text
-    assert "- 3. Runtime Event Buttons - PASSED" in roadmap_text
-    assert "- 4. Dashboard Visibility Proof - PASSED" in roadmap_text
-    for i in range(5, 17):
-        assert f"- {i}." in roadmap_text and "Pending / Not started" in roadmap_text
+    expected_passed = [
+        "- 1. Protected Trigger Panel Shell - PASSED",
+        "- 2. Full Runtime Event Payload Builder - PASSED",
+        "- 3. Runtime Event Buttons - PASSED",
+        "- 4. Dashboard Visibility Proof - PASSED",
+        "- 5. Output Trigger Buttons - PASSED",
+        "- 6. Health Trigger Buttons - PASSED",
+        "- 7. Automation Outcome Buttons - PASSED",
+        "- 8. Queue Trigger Buttons - PASSED",
+        "- 9. Approvals Trigger Buttons - PASSED",
+        "- 10. Flags Trigger Buttons - PASSED",
+        "- 11. Manager Signal Buttons - PASSED",
+        "- 12. Runtime Registry Probe - PASSED",
+        "- 13. Library / Archive Probe - PASSED",
+        "- 14. Unified Trigger Result Log - PASSED",
+        "- 15. Test Data Cleanup Controls - PASSED",
+        "- 16. Final Trigger Panel Audit Closure - PASSED",
+    ]
+    for line in expected_passed:
+        assert line in roadmap_text
 
 
 def test_docs_include_required_trigger_panel_contract_flags() -> None:
@@ -101,3 +135,17 @@ def test_no_false_claim_of_live_subby_dashboard_integration() -> None:
     lowered = text.lower()
     for claim in forbidden_claims:
         assert claim not in lowered
+
+
+def test_final_trigger_panel_audit_closure_doc_exists_and_is_honest() -> None:
+    assert FINAL_AUDIT.exists()
+    text = _read(FINAL_AUDIT)
+    lowered = text.lower()
+    assert "local/operator proof" in lowered
+    assert "not claimed" in lowered
+    assert "no fake revenue" in lowered
+    assert "no fake roi" in lowered
+    assert "no fake ads" in lowered
+    assert "no fake payments" in lowered
+    assert "no fake affiliate payouts" in lowered
+    assert "live subby dashboard integration status" in lowered

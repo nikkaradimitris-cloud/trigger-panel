@@ -19,6 +19,64 @@ EVENT_TYPES = (
     "runtime_ping",
 )
 
+ACTION_TYPES_BY_CATEGORY = {
+    "Output Trigger Buttons": (
+        "output_created",
+        "output_delivered",
+        "output_failed",
+    ),
+    "Health Trigger Buttons": (
+        "health_ok",
+        "health_degraded",
+        "health_error",
+        "runtime_ping",
+    ),
+    "Automation Outcome Buttons": (
+        "automation_started",
+        "automation_succeeded",
+        "automation_failed",
+        "automation_requires_manual_intervention",
+    ),
+    "Queue Trigger Buttons": (
+        "queue_item_created",
+        "queue_item_started",
+        "queue_item_completed",
+        "queue_item_failed",
+    ),
+    "Approvals Trigger Buttons": (
+        "approval_requested",
+        "approval_approved",
+        "approval_rejected",
+        "approval_expired",
+    ),
+    "Flags Trigger Buttons": (
+        "flag_info",
+        "flag_warning",
+        "flag_error",
+        "flag_resolved",
+    ),
+    "Manager Signal Buttons": (
+        "manager_signal_observed",
+        "manager_decision_requested",
+        "manager_decision_suggested",
+        "manager_action_required",
+    ),
+    "Runtime Registry Probe": (
+        "runtime_registry_probe",
+        "runtime_registry_available",
+        "runtime_registry_missing",
+        "runtime_registry_error",
+    ),
+    "Library / Archive Probe": (
+        "library_archive_probe",
+        "library_item_found",
+        "library_item_missing",
+        "library_archive_error",
+    ),
+}
+
+ACTION_TYPES = tuple(action for actions in ACTION_TYPES_BY_CATEGORY.values() for action in actions)
+
 
 class TriggerPanelApp:
     def __init__(
@@ -49,10 +107,26 @@ class TriggerPanelApp:
             event_type = path.rsplit("/", 1)[-1]
             return self._trigger_event(environ, start_response, event_type)
 
+        if path.startswith("/admin/trigger-panel/actions/") and method == "POST":
+            if not self._authorized(environ):
+                return self._redirect(start_response, "/gate")
+            action_type = path.rsplit("/", 1)[-1]
+            return self._trigger_action(environ, start_response, action_type)
+
         if path == "/admin/trigger-panel/summary":
             if not self._authorized(environ):
                 return self._redirect(start_response, "/gate")
             return self._summary(start_response)
+
+        if path == "/admin/trigger-panel/trigger-log":
+            if not self._authorized(environ):
+                return self._redirect(start_response, "/gate")
+            return self._unified_log(start_response)
+
+        if path == "/admin/trigger-panel/cleanup" and method == "POST":
+            if not self._authorized(environ):
+                return self._redirect(start_response, "/gate")
+            return self._cleanup(start_response)
 
         return self._respond_json(start_response, 404, {"error": "not_found"})
 
@@ -74,11 +148,43 @@ class TriggerPanelApp:
                 for event in EVENT_TYPES
             ]
         )
+        runtime_buttons = "\n".join(
+            [
+                "<form method='post' action='/admin/trigger-panel/events/{event}'>"
+                "<button type='submit'>Send {event}</button></form>".format(event=event)
+                for event in EVENT_TYPES
+            ]
+        )
+        action_sections = "\n".join(
+            [
+                "<section><h2>{title}</h2>{buttons}</section>".format(
+                    title=title,
+                    buttons="\n".join(
+                        [
+                            "<form method='post' action='/admin/trigger-panel/actions/{action}'>"
+                            "<button type='submit'>Send {action}</button></form>".format(action=action)
+                            for action in actions
+                        ]
+                    ),
+                )
+                for title, actions in ACTION_TYPES_BY_CATEGORY.items()
+            ]
+        )
+
         html = f"""
         <h1>Trigger Panel</h1>
-        <section><h2>Runtime Events</h2>{buttons}</section>
-        <section><h2>Health</h2><p>internal_operator_only</p></section>
-        <section><h2>Outputs</h2><p>Local summary at /admin/trigger-panel/summary</p></section>
+        <section><h2>Runtime Event Buttons</h2>{runtime_buttons}</section>
+        {action_sections}
+        <section>
+            <h2>Unified Trigger Result Log</h2>
+            <p>Local/operator proof at <code>/admin/trigger-panel/summary</code> and <code>/admin/trigger-panel/trigger-log</code>.</p>
+        </section>
+        <section>
+            <h2>Test Data Cleanup Controls</h2>
+            <form method='post' action='/admin/trigger-panel/cleanup'>
+                <button type='submit'>Run cleanup_operator_test_data</button>
+            </form>
+        </section>
         <section>
             <h2>Last Trigger Result</h2>
             <pre>{json.dumps(last_result, ensure_ascii=True)}</pre>
@@ -109,6 +215,33 @@ class TriggerPanelApp:
 
     def _summary(self, start_response):  # type: ignore[no-untyped-def]
         return self._respond_json(start_response, 200, self.service.get_summary())
+
+    def _unified_log(self, start_response):  # type: ignore[no-untyped-def]
+        return self._respond_json(start_response, 200, self.service.get_unified_log())
+
+    def _cleanup(self, start_response):  # type: ignore[no-untyped-def]
+        return self._respond_json(start_response, 200, self.service.cleanup_operator_test_data())
+
+    def _trigger_action(self, environ, start_response, action_type: str):  # type: ignore[no-untyped-def]
+        if action_type not in ACTION_TYPES:
+            return self._respond_json(start_response, 400, {"error": "unsupported_action_type"})
+        body = self._read_form_body(environ)
+        project_id = body.get("project_id", ["proj_trigger_panel"])[0]
+        result = self.service.trigger_action(
+            action_type,
+            project_id=project_id,
+            context={"triggered_from": "operator_action_button"},
+        )
+        return self._respond_json(
+            start_response,
+            200 if result["accepted"] else 422,
+            {
+                "event_id": result["event_id"],
+                "accepted": result["accepted"],
+                "stored": result["stored"],
+                "errors": result["errors"],
+            },
+        )
 
     @staticmethod
     def _read_form_body(environ) -> dict:  # type: ignore[no-untyped-def]

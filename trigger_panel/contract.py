@@ -47,8 +47,8 @@ def validate_bridge_payload(payload: dict[str, Any]) -> list[str]:
     if payload.get("operator_generated") is not True:
         errors.append("operator_generated must be true")
 
-    if not payload.get("event_type"):
-        errors.append("event_type is required")
+    if not payload.get("event_type") and not payload.get("signal_type"):
+        errors.append("event_type or signal_type is required")
 
     timestamp = payload.get("timestamp")
     if not isinstance(timestamp, str) or not is_valid_iso_timestamp(timestamp):
