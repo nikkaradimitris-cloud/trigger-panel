@@ -25,10 +25,27 @@ Trigger Panel is an internal operator test panel for controlled runtime signal t
 - No fake ROI, fake ads, fake revenue, fake payments, or fake affiliate payouts.
 - Excluded business metrics remain `disabled`, `not_connected`, `not_applicable`, or `data_not_yet` until proven real.
 
-## Stage 0 Scope
+## Current Scope
 
-Stage 0 is documentation and audit only. No Trigger Panel UI implementation is done in this stage.
+Stage 0 audit is complete, and Trigger Panel Core stages 1-4 are implemented locally as an internal proof block.
 
-## Future Deployment Direction
+### Implemented internal routes
 
-Live test URL direction is allowed in later stages for internal operators only, never as a public customer production surface.
+- `GET /admin/trigger-panel` (protected operator shell)
+- `POST /admin/trigger-panel/events/<event_type>` (runtime event triggers)
+- `GET /admin/trigger-panel/summary` (local visibility proof)
+- `GET /gate` (protected access fallback)
+
+### Local run
+
+```powershell
+python .\run_trigger_panel.py
+```
+
+Then call the protected route with header:
+
+- `X-Operator-Session: approved-operator`
+
+## Dashboard Integration Status
+
+Live Subby dashboard integration is not claimed in this repository. Current implementation proves local/operator test visibility only and requires a future adapter route for safe live integration.

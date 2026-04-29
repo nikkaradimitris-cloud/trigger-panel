@@ -36,12 +36,21 @@ def test_roadmap_contains_sections_0_to_16() -> None:
         assert f"- {i}." in text
 
 
-def test_section_0_is_passed_and_sections_1_to_16_are_not_passed() -> None:
+def test_section_0_is_passed_and_stage_lines_exist() -> None:
     roadmap_text = _read(ROADMAP)
     assert "0. Trigger Panel Architecture Audit - PASSED" in roadmap_text
     for i in range(1, 17):
         assert f"{i}." in roadmap_text
-        assert f"{i}." in roadmap_text and "Pending / Not started" in roadmap_text
+
+
+def test_roadmap_stage_statuses_after_core_block() -> None:
+    roadmap_text = _read(ROADMAP)
+    assert "- 1. Protected Trigger Panel Shell - PASSED" in roadmap_text
+    assert "- 2. Full Runtime Event Payload Builder - PASSED" in roadmap_text
+    assert "- 3. Runtime Event Buttons - PASSED" in roadmap_text
+    assert "- 4. Dashboard Visibility Proof - PASSED" in roadmap_text
+    for i in range(5, 17):
+        assert f"- {i}." in roadmap_text and "Pending / Not started" in roadmap_text
 
 
 def test_docs_include_required_trigger_panel_contract_flags() -> None:
