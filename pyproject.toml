@@ -1,0 +1,5 @@
+[project]
+name = "subby-trigger-panel"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = []
