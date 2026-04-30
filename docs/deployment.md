@@ -1,51 +1,36 @@
 # Trigger Panel Deployment
 
-This repository can be deployed as a standalone Trigger Panel web app.
+This repository supports Vercel deployment as a standalone Python WSGI app.
 
-## 1) Deploy this repo
+## Vercel deployment steps
 
-- Deploy `subby-trigger-panel` as its own Python web service.
-- Start command:
+1. Import GitHub repo `nikkaradimitris-cloud/trigger-panel` into Vercel.
+2. Keep the default Python build/runtime; the repo exposes `app` via `api/index.py`.
+3. Add environment variables in Vercel Project Settings:
+   - `BRIDGE_BASE_URL=https://manager.subby.cloud`
+   - `OPERATOR_ACCESS_TOKEN=<secret>`
+4. Deploy.
+5. Open `<vercel-url>/gate` and authenticate with `OPERATOR_ACCESS_TOKEN`.
+6. In manager dashboard, open `https://manager.subby.cloud/admin/bridge` and select **Add External App**.
+7. Paste the Vercel Trigger Panel URL and create the external app.
+8. Copy generated credentials back to Vercel env vars:
+   - `BRIDGE_PROJECT_ID=bridge_...`
+   - `BRIDGE_API_KEY=sbk_...`
+9. Redeploy after adding those env vars.
+10. Open Trigger Panel and press **Send page_view**.
+11. In manager dashboard, verify:
+    - Accepted Payloads increments
+    - Last Signal updates
 
-```bash
-python run_trigger_panel.py
-```
+## Entrypoints included in this repo
 
-- For Procfile-based hosts, this repo includes:
+- Local process entrypoint: `run_trigger_panel.py`
+- Vercel runtime entrypoint: `api/index.py`
+- Procfile command: `web: python run_trigger_panel.py`
 
-```text
-web: python run_trigger_panel.py
-```
+## Required environment variables
 
-## 2) Configure environment variables
-
-Set these on the hosting platform:
-
-- `BRIDGE_BASE_URL=https://manager.subby.cloud`
-- `BRIDGE_PROJECT_ID=<from manager External App setup>`
-- `BRIDGE_API_KEY=<from manager External App setup>`
-- `OPERATOR_ACCESS_TOKEN=<operator gate token>`
-- `HOST=0.0.0.0`
-- `PORT=8019` (or platform-provided port)
-
-## 3) Get the live Trigger Panel URL
-
-- After deploy, copy the public URL for this app.
-- Open: `<live-url>/gate`
-- Authenticate with `OPERATOR_ACCESS_TOKEN`.
-
-## 4) Connect in manager dashboard
-
-1. Open `https://manager.subby.cloud/admin/bridge`.
-2. Select **Add External App**.
-3. Paste the live Trigger Panel URL.
-4. Copy generated Project ID and API Key into this app's host env:
-   - `BRIDGE_PROJECT_ID`
-   - `BRIDGE_API_KEY`
-
-## 5) Verify bridge flow
-
-1. In Trigger Panel, press **Send page_view**.
-2. In manager dashboard, verify:
-   - Accepted Payloads increments
-   - Last Signal updates
+- `BRIDGE_BASE_URL` (set to `https://manager.subby.cloud`)
+- `OPERATOR_ACCESS_TOKEN`
+- `BRIDGE_PROJECT_ID` (after Add External App)
+- `BRIDGE_API_KEY` (after Add External App)
