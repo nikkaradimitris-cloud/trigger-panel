@@ -1,0 +1,2 @@
+# Trigger Panel uses Python standard library only at runtime.
+# No third-party runtime dependencies are required.

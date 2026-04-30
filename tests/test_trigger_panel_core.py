@@ -52,13 +52,19 @@ def test_protected_route_renders_shell_with_session(tmp_path: Path) -> None:
     status, _, body = _wsgi_call(app, "GET", "/admin/trigger-panel", token="approved-operator")
     text = body.decode("utf-8")
     assert status == 200
-    assert "Runtime Event Buttons" in text
-    assert "Output Trigger Buttons" in text
-    assert "Health Trigger Buttons" in text
+    assert "Bridge Connection Status" in text
+    assert "Runtime Events" in text
+    assert "Outputs" in text
+    assert "Health" in text
+    assert "Automation Outcomes" in text
+    assert "Queue" in text
+    assert "Approvals" in text
+    assert "Flags" in text
+    assert "Manager Signals" in text
     assert "Runtime Registry Probe" in text
     assert "Library / Archive Probe" in text
-    assert "Unified Trigger Result Log" in text
-    assert "Test Data Cleanup Controls" in text
+    assert "Dashboard Visibility Check" in text
+    assert "Disabled Advertising / Performance" in text
     assert "Last Trigger Result" in text
 
 
@@ -229,6 +235,7 @@ def test_all_payloads_include_operator_test_markers_and_no_fake_metrics() -> Non
         assert payload["source"] == "trigger_panel"
         assert payload["test_mode"] is True
         assert payload["operator_generated"] is True
+        assert payload["signal_type"] == event_type
         assert payload["revenue"] is None
         assert payload["conversion"] is None
         assert payload["cost"] is None
@@ -243,6 +250,7 @@ def test_all_payloads_include_operator_test_markers_and_no_fake_metrics() -> Non
         assert payload["source"] == "trigger_panel"
         assert payload["test_mode"] is True
         assert payload["operator_generated"] is True
+        assert payload["signal_type"] == action_type
         assert payload.get("revenue") is None
         assert payload.get("conversion") is None
         assert payload.get("cost") is None

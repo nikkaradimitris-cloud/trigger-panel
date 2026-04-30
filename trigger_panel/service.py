@@ -4,15 +4,22 @@ from __future__ import annotations
 
 from typing import Any
 
+from .bridge_push import push_to_bridge
 from .contract import validate_bridge_payload
 from .payload_builder import build_action_payload, build_runtime_event_payload
 from .storage import TriggerEventStore
 
 
 class TriggerPanelService:
-    def __init__(self, store: TriggerEventStore, default_project_id: str = "proj_trigger_panel") -> None:
+    def __init__(
+        self,
+        store: TriggerEventStore,
+        default_project_id: str = "proj_trigger_panel",
+        bridge_pusher=push_to_bridge,
+    ) -> None:
         self.store = store
         self.default_project_id = default_project_id
+        self.bridge_pusher = bridge_pusher
         self.last_result: dict[str, Any] | None = None
 
     def trigger_event(self, event_type: str, *, project_id: str | None = None, context: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -75,6 +82,9 @@ class TriggerPanelService:
             "stored": stored,
             "errors": errors,
             "payload": payload,
+            "bridge_result": None,
         }
+        if accepted:
+            result["bridge_result"] = self.bridge_pusher(payload)
         self.last_result = result
         return result

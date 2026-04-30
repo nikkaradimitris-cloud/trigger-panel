@@ -111,7 +111,7 @@ def _base_payload(
         "event_id": f"tp_{uuid4().hex}",
         "project_id": project_id,
         "event_type": event_type,
-        "signal_type": signal_type,
+        "signal_type": signal_type or event_type,
         "timestamp": _utc_now_iso(),
         "metadata": clean_metadata,
         "test_mode": True,
