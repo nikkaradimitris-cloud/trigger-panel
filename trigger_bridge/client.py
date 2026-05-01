@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import socket
 from datetime import datetime, timezone
 from typing import Any
 from urllib.error import HTTPError, URLError
@@ -26,6 +27,8 @@ def _redact_api_key(value: str | None) -> str:
 
 
 def _redact_text(text: str, api_key: str) -> str:
+    if not api_key:
+        return text
     return text.replace(api_key, _redact_api_key(api_key))
 
 
@@ -89,7 +92,7 @@ class BridgeClient:
             },
         )
         try:
-            with urlopen(request, timeout=10) as response:
+            with urlopen(request, timeout=self.config.request_timeout_seconds) as response:
                 http_status = int(response.status)
                 raw_text = response.read().decode("utf-8")
             parsed = json.loads(raw_text) if raw_text else {}
@@ -114,6 +117,14 @@ class BridgeClient:
                 http_status=int(exc.code),
                 error=parsed.get("error", "bridge_http_error") if isinstance(parsed, dict) else "bridge_http_error",
                 safe_raw=safe_raw,
+                debug_outbound_body=bridge_payload,
+            )
+        except (TimeoutError, socket.timeout):
+            return self._normalize_error(
+                bridge_status="request_failed",
+                http_status=None,
+                error="request_timeout",
+                safe_raw={"error": "request_timeout"},
                 debug_outbound_body=bridge_payload,
             )
         except URLError as exc:

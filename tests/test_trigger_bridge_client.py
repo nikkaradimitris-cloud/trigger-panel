@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import io
 import json
+import socket
 from typing import Any
 from urllib.error import HTTPError
 
 import pytest
 
-from trigger_bridge.client import BridgeClient
-from trigger_bridge.config import BridgeConfig
+from trigger_bridge.client import BridgeClient, push_trigger_payload_from_env
+from trigger_bridge.config import BridgeConfig, DEFAULT_REQUEST_TIMEOUT_SECONDS
 from trigger_bridge.payload_mapper import BridgePayloadMapError, map_trigger_payload
 from trigger_panel.payload_builder import build_runtime_event_payload
 
@@ -143,6 +144,106 @@ def test_client_sends_api_key_header_only_and_normalizes_accepted(monkeypatch) -
     assert result["error"] is None
 
 
+def test_client_uses_longer_default_request_timeout(monkeypatch) -> None:
+    config = _bridge_config()
+    client = BridgeClient(config)
+    trigger_payload = build_runtime_event_payload(event_type="page_view", project_id="local_project_1")
+    captured: dict[str, Any] = {}
+
+    class _FakeResponse:
+        def __init__(self) -> None:
+            self.status = 200
+
+        def read(self) -> bytes:
+            return b'{"status":"accepted"}'
+
+        def __enter__(self) -> "_FakeResponse":
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> bool:
+            return False
+
+    def _fake_urlopen(request, timeout: float):
+        captured["timeout"] = timeout
+        return _FakeResponse()
+
+    monkeypatch.setattr("trigger_bridge.client.urlopen", _fake_urlopen)
+    result = client.push(trigger_payload)
+
+    assert captured["timeout"] == DEFAULT_REQUEST_TIMEOUT_SECONDS
+    assert captured["timeout"] > 10
+    assert result["bridge_status"] == "accepted"
+    assert result["http_status"] == 200
+
+
+def test_env_bridge_request_timeout_overrides_default(monkeypatch) -> None:
+    trigger_payload = build_runtime_event_payload(event_type="page_view", project_id="local_project_1")
+    captured: dict[str, Any] = {}
+
+    class _FakeResponse:
+        def __init__(self) -> None:
+            self.status = 200
+
+        def read(self) -> bytes:
+            return b'{"status":"accepted"}'
+
+        def __enter__(self) -> "_FakeResponse":
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> bool:
+            return False
+
+    def _fake_urlopen(request, timeout: float):
+        captured["timeout"] = timeout
+        return _FakeResponse()
+
+    monkeypatch.setenv("BRIDGE_BASE_URL", "https://manager.subby.cloud")
+    monkeypatch.setenv("BRIDGE_PROJECT_ID", "bridge_oz930lsxmdku")
+    monkeypatch.setenv("BRIDGE_API_KEY", "sbk_live_super_secret_key")
+    monkeypatch.setenv("BRIDGE_REQUEST_TIMEOUT_SECONDS", "25")
+    monkeypatch.setattr("trigger_bridge.client.urlopen", _fake_urlopen)
+
+    result = push_trigger_payload_from_env(trigger_payload)
+
+    assert captured["timeout"] == 25.0
+    assert result["bridge_status"] == "accepted"
+    assert result["http_status"] == 200
+
+
+def test_invalid_env_bridge_request_timeout_falls_back_safely(monkeypatch) -> None:
+    trigger_payload = build_runtime_event_payload(event_type="page_view", project_id="local_project_1")
+    captured: dict[str, Any] = {}
+
+    class _FakeResponse:
+        def __init__(self) -> None:
+            self.status = 200
+
+        def read(self) -> bytes:
+            return b'{"status":"accepted"}'
+
+        def __enter__(self) -> "_FakeResponse":
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> bool:
+            return False
+
+    def _fake_urlopen(request, timeout: float):
+        captured["timeout"] = timeout
+        return _FakeResponse()
+
+    monkeypatch.setenv("BRIDGE_BASE_URL", "https://manager.subby.cloud")
+    monkeypatch.setenv("BRIDGE_PROJECT_ID", "bridge_oz930lsxmdku")
+    monkeypatch.setenv("BRIDGE_API_KEY", "sbk_live_super_secret_key")
+    monkeypatch.setenv("BRIDGE_REQUEST_TIMEOUT_SECONDS", "not_a_number")
+    monkeypatch.setattr("trigger_bridge.client.urlopen", _fake_urlopen)
+
+    result = push_trigger_payload_from_env(trigger_payload)
+
+    assert captured["timeout"] == DEFAULT_REQUEST_TIMEOUT_SECONDS
+    assert result["bridge_status"] == "accepted"
+    assert result["http_status"] == 200
+
+
 def test_client_normalizes_500_bridge_api_internal_error(monkeypatch) -> None:
     config = _bridge_config()
     client = BridgeClient(config)
@@ -177,3 +278,24 @@ def test_client_normalizes_500_bridge_api_internal_error(monkeypatch) -> None:
     _assert_debug_outbound_shape(result["debug_outbound_body"])
     assert "sbk_live_super_secret_key" not in json.dumps(result["debug_outbound_body"])
     assert "x-bridge-api-key" not in json.dumps(result["debug_outbound_body"]).lower()
+
+
+def test_client_normalizes_request_timeout_safely(monkeypatch) -> None:
+    config = _bridge_config()
+    client = BridgeClient(config)
+    trigger_payload = build_runtime_event_payload(event_type="page_view", project_id="local_project_1")
+
+    def _fake_urlopen(request, timeout: float):
+        raise socket.timeout("The read operation timed out")
+
+    monkeypatch.setattr("trigger_bridge.client.urlopen", _fake_urlopen)
+    result = client.push(trigger_payload)
+
+    assert result["status"] == "failed"
+    assert result["accepted"] is False
+    assert result["bridge_status"] == "request_failed"
+    assert result["http_status"] is None
+    assert result["error"] == "request_timeout"
+    assert result["raw_response"] == {"error": "request_timeout"}
+    _assert_debug_outbound_shape(result["debug_outbound_body"])
+    assert "sbk_live_super_secret_key" not in json.dumps(result)
