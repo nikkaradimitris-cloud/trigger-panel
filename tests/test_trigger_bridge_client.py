@@ -21,6 +21,21 @@ def _bridge_config() -> BridgeConfig:
     )
 
 
+def _assert_debug_outbound_shape(debug_outbound_body: dict[str, Any]) -> None:
+    required_top_level_fields = {
+        "schema_version",
+        "source_app",
+        "project_id",
+        "timestamp",
+        "signal_type",
+        "test_mode",
+        "operator_generated",
+        "payload",
+    }
+    assert isinstance(debug_outbound_body, dict)
+    assert required_top_level_fields.issubset(set(debug_outbound_body.keys()))
+
+
 def test_page_view_mapper_produces_required_bridge_body_shape() -> None:
     trigger_payload = build_runtime_event_payload(event_type="page_view", project_id="local_project_1")
     outbound = map_trigger_payload(trigger_payload, bridge_project_id="bridge_oz930lsxmdku")
@@ -33,7 +48,18 @@ def test_page_view_mapper_produces_required_bridge_body_shape() -> None:
     assert outbound["test_mode"] is True
     assert outbound["operator_generated"] is True
     assert isinstance(outbound["payload"], dict)
+    assert outbound["payload"]["project_id"] == "bridge_oz930lsxmdku"
     assert outbound["payload"]["signal_type"] == "page_view"
+    assert "local_project_1" not in json.dumps(outbound)
+
+
+def test_mapper_overrides_nested_payload_project_id_with_bridge_project_id() -> None:
+    trigger_payload = build_runtime_event_payload(event_type="page_view", project_id="local_project_1")
+    outbound = map_trigger_payload(trigger_payload, bridge_project_id="bridge_oz930lsxmdku")
+
+    assert outbound["project_id"] == "bridge_oz930lsxmdku"
+    assert outbound["payload"]["project_id"] == "bridge_oz930lsxmdku"
+    assert "local_project_1" not in json.dumps(outbound)
 
 
 def test_mapper_rejects_empty_signal_type() -> None:
@@ -95,6 +121,13 @@ def test_client_sends_api_key_header_only_and_normalizes_accepted(monkeypatch) -
     assert "sbk_live_super_secret_key" not in json.dumps(captured["body"])
     assert captured["body"]["signal_type"] == "page_view"
     assert isinstance(captured["body"]["payload"], dict)
+    assert captured["body"]["project_id"] == "bridge_oz930lsxmdku"
+    assert captured["body"]["payload"]["project_id"] == "bridge_oz930lsxmdku"
+    assert "local_project_1" not in json.dumps(captured["body"])
+    assert result["debug_outbound_body"] == captured["body"]
+    _assert_debug_outbound_shape(result["debug_outbound_body"])
+    assert "sbk_live_super_secret_key" not in json.dumps(result["debug_outbound_body"])
+    assert "x-bridge-api-key" not in json.dumps(result["debug_outbound_body"]).lower()
 
     assert result["status"] == "accepted"
     assert result["accepted"] is True
@@ -134,3 +167,6 @@ def test_client_normalizes_500_bridge_api_internal_error(monkeypatch) -> None:
     assert result["http_status"] == 500
     assert result["error"] == "bridge_api_internal_error"
     assert result["raw_response"]["message"] == "bridge ingest failed"
+    _assert_debug_outbound_shape(result["debug_outbound_body"])
+    assert "sbk_live_super_secret_key" not in json.dumps(result["debug_outbound_body"])
+    assert "x-bridge-api-key" not in json.dumps(result["debug_outbound_body"]).lower()

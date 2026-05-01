@@ -29,5 +29,6 @@ def push_to_bridge(trigger_payload: dict[str, Any]) -> dict[str, Any]:
             "http_status": None,
             "error": "trigger_bridge_adapter_unavailable",
             "raw_response": None,
+            "debug_outbound_body": None,
         }
     return push_func(trigger_payload)

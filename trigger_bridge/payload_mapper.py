@@ -66,6 +66,12 @@ def _resolve_payload_object(trigger_payload: dict[str, Any], *, signal_type: str
     return payload_object
 
 
+def _enforce_project_id_alignment(payload_object: dict[str, Any], *, project_id: str) -> dict[str, Any]:
+    aligned_payload = dict(payload_object)
+    aligned_payload["project_id"] = project_id
+    return aligned_payload
+
+
 def _enforce_null_honesty(trigger_payload: dict[str, Any]) -> None:
     for field in ("revenue", "cost", "conversion"):
         if trigger_payload.get(field) is not None:
@@ -103,6 +109,7 @@ def map_trigger_payload(trigger_payload: dict[str, Any], *, bridge_project_id: s
     _enforce_null_honesty(trigger_payload)
     signal_type = _resolve_signal_type(trigger_payload)
     payload_object = _resolve_payload_object(trigger_payload, signal_type=signal_type)
+    payload_object = _enforce_project_id_alignment(payload_object, project_id=project_id)
 
     incoming_timestamp = trigger_payload.get("timestamp")
     if isinstance(incoming_timestamp, str) and incoming_timestamp.strip() and _is_valid_iso_timestamp(incoming_timestamp):

@@ -58,6 +58,7 @@ def _base_result(*, project_id: str, action: str, bridge_status: str) -> dict[st
         "http_status": None,
         "error": None,
         "raw_response": None,
+        "debug_outbound_body": None,
     }
 
 
@@ -75,6 +76,7 @@ class BridgeClient:
             result["error"] = str(exc)
             return result
 
+        result["debug_outbound_body"] = bridge_payload
         body = json.dumps(bridge_payload, ensure_ascii=True).encode("utf-8")
         request = Request(
             self.config.ingest_url,
@@ -92,7 +94,12 @@ class BridgeClient:
                 raw_text = response.read().decode("utf-8")
             parsed = json.loads(raw_text) if raw_text else {}
             safe_raw = _safe_json(parsed, api_key=self.config.api_key)
-            normalized = self._normalize_success(parsed=parsed, safe_raw=safe_raw, http_status=http_status)
+            normalized = self._normalize_success(
+                parsed=parsed,
+                safe_raw=safe_raw,
+                http_status=http_status,
+                debug_outbound_body=bridge_payload,
+            )
             return normalized
         except HTTPError as exc:
             raw_text = exc.read().decode("utf-8", errors="replace")
@@ -107,6 +114,7 @@ class BridgeClient:
                 http_status=int(exc.code),
                 error=parsed.get("error", "bridge_http_error") if isinstance(parsed, dict) else "bridge_http_error",
                 safe_raw=safe_raw,
+                debug_outbound_body=bridge_payload,
             )
         except URLError as exc:
             return self._normalize_error(
@@ -114,6 +122,7 @@ class BridgeClient:
                 http_status=None,
                 error=_redact_text(str(exc.reason), self.config.api_key),
                 safe_raw={"error": "url_error"},
+                debug_outbound_body=bridge_payload,
             )
         except Exception as exc:  # pragma: no cover - defensive fallback
             return self._normalize_error(
@@ -121,9 +130,17 @@ class BridgeClient:
                 http_status=None,
                 error=_redact_text(str(exc), self.config.api_key),
                 safe_raw={"error": "unexpected_error"},
+                debug_outbound_body=bridge_payload,
             )
 
-    def _normalize_success(self, *, parsed: dict[str, Any], safe_raw: Any, http_status: int) -> dict[str, Any]:
+    def _normalize_success(
+        self,
+        *,
+        parsed: dict[str, Any],
+        safe_raw: Any,
+        http_status: int,
+        debug_outbound_body: dict[str, Any],
+    ) -> dict[str, Any]:
         status_text = str(parsed.get("status") or "").strip().lower()
         bridge_event = parsed.get("bridge_event") if isinstance(parsed.get("bridge_event"), dict) else {}
         runtime_event = parsed.get("runtime_event") if isinstance(parsed.get("runtime_event"), dict) else {}
@@ -140,6 +157,7 @@ class BridgeClient:
         normalized["event_id"] = runtime_event.get("id") or bridge_event.get("runtime_event_id")
         normalized["http_status"] = http_status
         normalized["raw_response"] = safe_raw
+        normalized["debug_outbound_body"] = debug_outbound_body
         if not accepted:
             normalized["error"] = str(parsed.get("error") or "bridge_rejected")
         return normalized
@@ -151,6 +169,7 @@ class BridgeClient:
         http_status: int | None,
         error: str,
         safe_raw: Any,
+        debug_outbound_body: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         normalized = _base_result(
             project_id=self.config.project_id,
@@ -163,6 +182,7 @@ class BridgeClient:
         normalized["http_status"] = http_status
         normalized["error"] = _redact_text(error, self.config.api_key)
         normalized["raw_response"] = safe_raw
+        normalized["debug_outbound_body"] = debug_outbound_body
         return normalized
 
 
@@ -179,6 +199,7 @@ def not_configured_result() -> dict[str, Any]:
         "http_status": None,
         "error": "missing_bridge_env",
         "raw_response": None,
+        "debug_outbound_body": None,
     }
 
 
