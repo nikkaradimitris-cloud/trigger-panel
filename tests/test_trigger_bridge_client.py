@@ -1,0 +1,136 @@
+from __future__ import annotations
+
+import io
+import json
+from typing import Any
+from urllib.error import HTTPError
+
+import pytest
+
+from trigger_bridge.client import BridgeClient
+from trigger_bridge.config import BridgeConfig
+from trigger_bridge.payload_mapper import BridgePayloadMapError, map_trigger_payload
+from trigger_panel.payload_builder import build_runtime_event_payload
+
+
+def _bridge_config() -> BridgeConfig:
+    return BridgeConfig(
+        base_url="https://manager.subby.cloud",
+        project_id="bridge_oz930lsxmdku",
+        api_key="sbk_live_super_secret_key",
+    )
+
+
+def test_page_view_mapper_produces_required_bridge_body_shape() -> None:
+    trigger_payload = build_runtime_event_payload(event_type="page_view", project_id="local_project_1")
+    outbound = map_trigger_payload(trigger_payload, bridge_project_id="bridge_oz930lsxmdku")
+
+    assert outbound["schema_version"] == "1.0"
+    assert outbound["source_app"] == "Trigger Panel Core Live Final"
+    assert outbound["project_id"] == "bridge_oz930lsxmdku"
+    assert isinstance(outbound["timestamp"], str) and outbound["timestamp"].strip()
+    assert outbound["signal_type"] == "page_view"
+    assert outbound["test_mode"] is True
+    assert outbound["operator_generated"] is True
+    assert isinstance(outbound["payload"], dict)
+    assert outbound["payload"]["signal_type"] == "page_view"
+
+
+def test_mapper_rejects_empty_signal_type() -> None:
+    trigger_payload = {
+        "source": "trigger_panel",
+        "test_mode": True,
+        "operator_generated": True,
+        "signal_type": "   ",
+        "event_type": "",
+        "action": None,
+        "payload": {},
+    }
+    with pytest.raises(BridgePayloadMapError, match="missing_signal_type"):
+        map_trigger_payload(trigger_payload, bridge_project_id="bridge_oz930lsxmdku")
+
+
+def test_mapper_rejects_fake_financial_or_ads_fields() -> None:
+    trigger_payload = build_runtime_event_payload(event_type="page_view", project_id="local_project_1")
+    trigger_payload["payload"]["ads"] = "active_campaign"
+    with pytest.raises(BridgePayloadMapError, match="fake_value_not_allowed:ads"):
+        map_trigger_payload(trigger_payload, bridge_project_id="bridge_oz930lsxmdku")
+
+
+def test_client_sends_api_key_header_only_and_normalizes_accepted(monkeypatch) -> None:
+    config = _bridge_config()
+    client = BridgeClient(config)
+    trigger_payload = build_runtime_event_payload(event_type="page_view", project_id="local_project_1")
+    captured: dict[str, Any] = {}
+
+    class _FakeResponse:
+        def __init__(self) -> None:
+            self.status = 200
+
+        def read(self) -> bytes:
+            return json.dumps(
+                {
+                    "status": "accepted",
+                    "project_id": "bridge_oz930lsxmdku",
+                    "runtime_event": {"id": "runtime_evt_1"},
+                }
+            ).encode("utf-8")
+
+        def __enter__(self) -> "_FakeResponse":
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> bool:
+            return False
+
+    def _fake_urlopen(request, timeout: int):
+        captured["headers"] = dict(request.headers)
+        captured["body"] = json.loads(request.data.decode("utf-8"))
+        return _FakeResponse()
+
+    monkeypatch.setattr("trigger_bridge.client.urlopen", _fake_urlopen)
+    result = client.push(trigger_payload)
+
+    lower_headers = {str(k).lower(): str(v) for k, v in captured["headers"].items()}
+    assert lower_headers["x-bridge-api-key"] == "sbk_live_super_secret_key"
+    assert "sbk_live_super_secret_key" not in json.dumps(captured["body"])
+    assert captured["body"]["signal_type"] == "page_view"
+    assert isinstance(captured["body"]["payload"], dict)
+
+    assert result["status"] == "accepted"
+    assert result["accepted"] is True
+    assert result["bridge_status"] == "accepted"
+    assert result["http_status"] == 200
+    assert result["error"] is None
+
+
+def test_client_normalizes_500_bridge_api_internal_error(monkeypatch) -> None:
+    config = _bridge_config()
+    client = BridgeClient(config)
+    trigger_payload = build_runtime_event_payload(event_type="page_view", project_id="local_project_1")
+
+    def _fake_urlopen(request, timeout: int):
+        raise HTTPError(
+            url=config.ingest_url,
+            code=500,
+            msg="Internal Server Error",
+            hdrs=None,
+            fp=io.BytesIO(
+                json.dumps(
+                    {
+                        "error": "bridge_api_internal_error",
+                        "message": "bridge ingest failed",
+                        "project_id": "bridge_oz930lsxmdku",
+                    }
+                ).encode("utf-8")
+            ),
+        )
+
+    monkeypatch.setattr("trigger_bridge.client.urlopen", _fake_urlopen)
+    result = client.push(trigger_payload)
+
+    assert result["status"] == "rejected"
+    assert result["accepted"] is False
+    assert result["bridge_status"] == "rejected"
+    assert result["http_status"] == 500
+    assert result["error"] == "bridge_api_internal_error"
+    assert result["raw_response"]["message"] == "bridge ingest failed"

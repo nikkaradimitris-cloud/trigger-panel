@@ -21,6 +21,8 @@ BLOCKED_FAKE_FIELDS = (
     "ltv",
     "cac",
 )
+BRIDGE_SCHEMA_VERSION = "1.0"
+BRIDGE_SOURCE_APP = "Trigger Panel Core Live Final"
 
 
 def _utc_now_iso() -> str:
@@ -50,6 +52,18 @@ def _resolve_signal_type(trigger_payload: dict[str, Any]) -> str:
         if isinstance(value, str) and value.strip():
             return value.strip()
     raise BridgePayloadMapError("missing_signal_type")
+
+
+def _resolve_payload_object(trigger_payload: dict[str, Any], *, signal_type: str) -> dict[str, Any]:
+    nested_payload = trigger_payload.get("payload")
+    if isinstance(nested_payload, dict):
+        payload_object = dict(nested_payload)
+    else:
+        payload_object = dict(trigger_payload)
+
+    # Ensure downstream bridge handlers never receive an empty signal marker.
+    payload_object["signal_type"] = signal_type
+    return payload_object
 
 
 def _enforce_null_honesty(trigger_payload: dict[str, Any]) -> None:
@@ -88,6 +102,7 @@ def map_trigger_payload(trigger_payload: dict[str, Any], *, bridge_project_id: s
     _ensure_required_markers(trigger_payload)
     _enforce_null_honesty(trigger_payload)
     signal_type = _resolve_signal_type(trigger_payload)
+    payload_object = _resolve_payload_object(trigger_payload, signal_type=signal_type)
 
     incoming_timestamp = trigger_payload.get("timestamp")
     if isinstance(incoming_timestamp, str) and incoming_timestamp.strip() and _is_valid_iso_timestamp(incoming_timestamp):
@@ -96,12 +111,12 @@ def map_trigger_payload(trigger_payload: dict[str, Any], *, bridge_project_id: s
         timestamp = _utc_now_iso()
 
     return {
-        "schema_version": "1.0",
-        "source_app": "subby-trigger-panel",
+        "schema_version": BRIDGE_SCHEMA_VERSION,
+        "source_app": BRIDGE_SOURCE_APP,
         "project_id": project_id,
         "timestamp": timestamp,
         "signal_type": signal_type,
-        "payload": trigger_payload,
+        "payload": payload_object,
         "test_mode": True,
         "operator_generated": True,
     }
