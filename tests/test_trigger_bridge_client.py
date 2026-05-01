@@ -25,6 +25,7 @@ def _assert_debug_outbound_shape(debug_outbound_body: dict[str, Any]) -> None:
     required_top_level_fields = {
         "schema_version",
         "source_app",
+        "source",
         "project_id",
         "timestamp",
         "signal_type",
@@ -42,12 +43,14 @@ def test_page_view_mapper_produces_required_bridge_body_shape() -> None:
 
     assert outbound["schema_version"] == "1.0"
     assert outbound["source_app"] == "Trigger Panel Core Live Final"
+    assert outbound["source"] == "trigger_panel"
     assert outbound["project_id"] == "bridge_oz930lsxmdku"
     assert isinstance(outbound["timestamp"], str) and outbound["timestamp"].strip()
     assert outbound["signal_type"] == "page_view"
     assert outbound["test_mode"] is True
     assert outbound["operator_generated"] is True
     assert isinstance(outbound["payload"], dict)
+    assert outbound["payload"]["source"] == "trigger_panel"
     assert outbound["payload"]["project_id"] == "bridge_oz930lsxmdku"
     assert outbound["payload"]["signal_type"] == "page_view"
     assert "local_project_1" not in json.dumps(outbound)
@@ -58,6 +61,8 @@ def test_mapper_overrides_nested_payload_project_id_with_bridge_project_id() -> 
     outbound = map_trigger_payload(trigger_payload, bridge_project_id="bridge_oz930lsxmdku")
 
     assert outbound["project_id"] == "bridge_oz930lsxmdku"
+    assert outbound["source"] == "trigger_panel"
+    assert outbound["payload"]["source"] == "trigger_panel"
     assert outbound["payload"]["project_id"] == "bridge_oz930lsxmdku"
     assert "local_project_1" not in json.dumps(outbound)
 
@@ -120,7 +125,9 @@ def test_client_sends_api_key_header_only_and_normalizes_accepted(monkeypatch) -
     assert lower_headers["x-bridge-api-key"] == "sbk_live_super_secret_key"
     assert "sbk_live_super_secret_key" not in json.dumps(captured["body"])
     assert captured["body"]["signal_type"] == "page_view"
+    assert captured["body"]["source"] == "trigger_panel"
     assert isinstance(captured["body"]["payload"], dict)
+    assert captured["body"]["payload"]["source"] == "trigger_panel"
     assert captured["body"]["project_id"] == "bridge_oz930lsxmdku"
     assert captured["body"]["payload"]["project_id"] == "bridge_oz930lsxmdku"
     assert "local_project_1" not in json.dumps(captured["body"])

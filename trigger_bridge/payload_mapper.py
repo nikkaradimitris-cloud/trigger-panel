@@ -23,6 +23,7 @@ BLOCKED_FAKE_FIELDS = (
 )
 BRIDGE_SCHEMA_VERSION = "1.0"
 BRIDGE_SOURCE_APP = "Trigger Panel Core Live Final"
+BRIDGE_SOURCE = "trigger_panel"
 
 
 def _utc_now_iso() -> str:
@@ -120,6 +121,7 @@ def map_trigger_payload(trigger_payload: dict[str, Any], *, bridge_project_id: s
     return {
         "schema_version": BRIDGE_SCHEMA_VERSION,
         "source_app": BRIDGE_SOURCE_APP,
+        "source": BRIDGE_SOURCE,
         "project_id": project_id,
         "timestamp": timestamp,
         "signal_type": signal_type,
